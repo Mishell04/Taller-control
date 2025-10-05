@@ -1,0 +1,68 @@
+clear all; close all; clc;
+
+%% --- Planta identificada (desde los datos) ---
+% Ganancia y parámetros obtenidos en la identificación
+K     = 0.1267;   % ganancia estacionaria aproximada
+zeta  = 0.54;     % factor de amortiguamiento estimado
+Ts    = 13;       % tiempo de establecimiento aproximado [s]
+
+% Frecuencia natural estimada
+wn = pi/(zeta*Ts);
+
+% Polinomio denominador de la planta en forma estándar
+B  = K*wn^2;
+a1 = 2*zeta*wn;
+a0 = wn^2;
+
+% Función de transferencia de la planta identificada
+num = [B];
+den = [1 a1 a0];
+G = tf(num, den);
+
+figure;
+step(G, 'b'); hold on;
+title('Planta identificada y modelo deseado');
+xlabel('Tiempo [s]'); ylabel('Amplitud');
+
+%% --- Especificaciones deseadas ---
+% Definimos desempeño deseado
+zeta_d = 0.7;       % amortiguamiento deseado (<=5% overshoot)
+ts_des = 5;         % tiempo de establecimiento deseado [s]
+wn_d   = 4/(zeta_d*ts_des);  % frecuencia natural deseada
+
+% Tercer polo real rápido (10 veces wn_d)
+p3 = -10*wn_d;
+
+% Polinomio característico deseado (cúbico)
+b = 2*zeta_d*wn_d;
+c = wn_d^2;
+A2 = b - p3;
+A1 = c - b*p3;
+A0 = -c*p3;
+
+%% --- Igualación de coeficientes (asignación de polos) ---
+% Ecuaciones:
+% a1 + B*Kd = A2
+% a0 + B*Kp = A1
+% B*Ki      = A0
+
+Kd = (A2 - a1)/B;
+Kp = (A1 - a0)/B;
+Ki = A0/B;
+
+fprintf('Resultados del controlador PID (asignación de polos):\n');
+fprintf('Kp = %.2f\n', Kp);
+fprintf('Ki = %.2f\n', Ki);
+fprintf('Kd = %.2f\n', Kd);
+
+%% --- Controlador PID en MATLAB ---
+% Con filtro derivativo (opcional, N=10)
+C = pid(Kp, Ki, Kd, 'FilterCoefficient', 10);
+
+% Sistema en lazo cerrado
+T = feedback(C*G, 1);
+
+% Respuesta a escalón
+step(T, 8*ts_des);
+grid on;
+legend('Planta identificada','Planta con PID');
